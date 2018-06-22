@@ -1,30 +1,17 @@
-# Shamir's Secret Sharing
+# Expanded Shamir's Secret Sharing
 
-[![Build Status](https://secure.travis-ci.org/codahale/shamir.svg)](http://travis-ci.org/codahale/shamir)
-
-A Java implementation of [Shamir's Secret Sharing
-algorithm](http://en.wikipedia.org/wiki/Shamir's_Secret_Sharing) over GF(256).
-
-## Add to your project
-
-```xml
-<dependency>
-  <groupId>com.codahale</groupId>
-  <artifactId>shamir</artifactId>
-  <version>0.6.0</version>
-</dependency>
-```
+[![Build Status](https://travis-ci.org/ba1ciu/shamir.svg?branch=master)](https://travis-ci.org/ba1ciu/shamir)
 
 ## Use the thing
 
 ```java
-import com.codahale.shamir.Scheme;
+import com.codahale.shamir.ExpandedScheme;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 class Example {
   void doIt() {
-    final Scheme scheme = Scheme.of(5, 3);
+    final ExpandedScheme scheme = ExpandedScheme.of(5, 1, 3);
     final byte[] secret = "hello there".getBytes(StandardCharsets.UTF_8);
     final Map<Integer, byte[]> parts = scheme.split(secret);
     final byte[] recovered = scheme.join(parts);
@@ -35,78 +22,27 @@ class Example {
 
 ## How it works
 
-Shamir's Secret Sharing algorithm is a way to split an arbitrary secret `S` into `N` parts, of which
-at least `K` are required to reconstruct `S`. For example, a root password can be split among five
-people, and if three or more of them combine their parts, they can recover the root password.
+Expanded Secret Sharing allows to split secret `S` into `N` parts, of which `M` are mandatory
+to reconstruct `S` and `K-M` are optional in the recovery process. Mandatory parts ID is always
+between `1` and `M`. Optional parts ID is always greater than `M`.
 
-### Splitting secrets
+Example:
 
-Splitting a secret woparts encoding the secret as the constant in a random polynomial of `K`
-degree. For example, if we're splitting the secret number `42` among five people with a threshold of
-three (`N=5,K=3`), we might end up with the polynomial:
+Password must be split between one admin and four users and to recover it, admin and at least any
+two of users must combine their parts. In this particular case, `ExpandedScheme[n=5, m=1, k=3]`
+is needed. Part with ID `1` should be given to admin and the rest can be randomly distributed
+between users.
 
-```
-f(x) = 71x^3 - 87x^2 + 18x + 42
-```
+## Implementation details
 
-To generate parts, we evaluate this polynomial for values of `x` greater than zero:
-
-```
-f(1) =   44
-f(2) =  298
-f(3) = 1230
-f(4) = 3266
-f(5) = 6822
-```
-
-These `(x,y)` pairs are then handed out to the five people. 
-
-### Joining parts 
-
-When three or more of them decide to recover the original secret, they pool their parts together:
-
-```
-f(1) =   44
-f(3) = 1230
-f(4) = 3266
-```
-
-Using these points, they construct a [Lagrange
-polynomial](https://en.wikipedia.org/wiki/Lagrange_polynomial), `g`, and calculate `g(0)`. If the
-number of parts is equal to or greater than the degree of the original polynomial (i.e. `K`), then
-`f` and `g` will be exactly the same, and `f(0) = g(0) = 42`, the encoded secret. If the number of
-parts is less than the threshold `K`, the polynomial will be different and `g(0)` will not be `42`.
-
-### Implementation details
-
-Shamir's Secret Sharing algorithm only works for finite fields, and this library performs all
-operations in [GF(256)](http://www.cs.utsa.edu/~wagner/laws/FFM.html). Each byte of a secret is
-encoded as a separate `GF(256)` polynomial, and the resulting parts are the aggregated values of
-those polynomials.
-
-Using `GF(256)` allows for secrets of arbitrary length and does not require additional parameters,
-unlike `GF(Q)`, which requires a safe modulus. It's also **much** faster than `GF(Q)`: splitting and
-combining a 1KiB secret into 8 parts with a threshold of 3 takes single-digit milliseconds, whereas
-performing the same operation over `GF(Q)` takes several seconds, even using per-byte polynomials.
-Treating the secret as a single `y` coordinate over `GF(Q)` is even slower, and requires a modulus
-larger than the secret.
-
-## Performance
-
-It's fast. Plenty fast.
-
-For a 1KiB secret split with a `n=4,k=3` scheme:
-
-```
-Benchmark         (n)  (secretSize)  Mode  Cnt     Score    Error  Units
-Benchmarks.join     4          1024  avgt  200   196.787 ±  0.974  us/op
-Benchmarks.split    4          1024  avgt  200   396.708 ±  1.520  us/op
-```
-
-**N.B.:** `split` is quadratic with respect to the number of shares being combined.
+Expanded Secret Sharing uses original Coda Hale's split and join operations implementations, just twice. Firstly, secret is
+splited into `M+1` parts, of which all are needed for reconstruction process. Parts with ID from `1` to `M` are the mandatory parts. Secondly, `M+1` part
+is splited into `M-K` optional parts with IDs between `M+1` and `K`. `K-M` optional parts are needed to reconstruct a part from previous split.
+This approach ensures that any `K` or more parts must include all of `M` mandatory parts to
+retrieve the original secret.
 
 ## License
 
-Copyright © 2017 Coda Hale
+Copyright © 2018 Balciu
 
 Distributed under the Apache License 2.0.
